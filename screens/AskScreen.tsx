@@ -3,8 +3,8 @@ import {
   FlatList, KeyboardAvoidingView, Platform,
   StyleSheet, Text, TextInput, TouchableOpacity, View
 } from 'react-native';
-
-const PEEK_API = 'http://10.48.143.118:5000';
+import { Feather } from '@expo/vector-icons';
+import { PEEK_API } from '../config';
 
 type Message = {
   id: string;
@@ -13,7 +13,7 @@ type Message = {
 };
 
 const INITIAL_MESSAGES: Message[] = [
-  { id: '0', role: 'peek', text: "Hi! I'm Peek. Ask me where anything is — I'm watching your home." }
+  { id: '0', role: 'peek', text: "Hi! I'm Peek. Ask me where anything is. I'm watching your home." }
 ];
 
 export default function AskScreen() {
@@ -31,6 +31,8 @@ export default function AskScreen() {
     setMessages(prev => [...prev, userMsg]);
     setIsTyping(true);
 
+    const started = Date.now();
+    let answer = '';
     try {
       const res = await fetch(`${PEEK_API}/query`, {
         method: 'POST',
@@ -38,23 +40,26 @@ export default function AskScreen() {
         body: JSON.stringify({ query }),
       });
       const data = await res.json();
-      const peekMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'peek',
-        text: data.response,
-      };
-      setMessages(prev => [...prev, peekMsg]);
-    } catch (e) {
-      const peekMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'peek',
-        text: "Can't reach Peek hub. Make sure the desktop app is running on the same network.",
-      };
-      setMessages(prev => [...prev, peekMsg]);
-    } finally {
-      setIsTyping(false);
-      listRef.current?.scrollToEnd({ animated: true });
+      answer = data.response;
+    } catch {
+      answer = "Can't reach Peek hub. Make sure the desktop app is running on the same network.";
     }
+
+    const elapsed = Date.now() - started;
+    const minThink = 800;
+    if (elapsed < minThink) {
+      await new Promise(r => setTimeout(r, minThink - elapsed));
+    }
+
+    const peekMsg: Message = { id: (Date.now() + 1).toString(), role: 'peek', text: answer };
+    setMessages(prev => [...prev, peekMsg]);
+    setIsTyping(false);
+    listRef.current?.scrollToEnd({ animated: true });
+  };
+
+  const clearChat = () => {
+    setMessages(INITIAL_MESSAGES);
+    setInput('');
   };
 
   return (
@@ -63,13 +68,22 @@ export default function AskScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={s.header}>
-        <View style={s.headerCenter}>
-          <Text style={s.headerTitle}>Peek</Text>
-          <View style={s.listeningRow}>
-            <View style={s.liveDot} />
-            <Text style={s.listeningText}>Listening</Text>
+        <View style={s.headerLeft}>
+          <View style={s.heroIcon}>
+            <Feather name="message-circle" size={22} color="#6EE7B7" />
+          </View>
+          <View>
+            <Text style={s.headerTitle}>Chat with Peek</Text>
+            <View style={s.listeningRow}>
+              <View style={s.liveDot} />
+              <Text style={s.listeningText}>Listening</Text>
+            </View>
           </View>
         </View>
+        <TouchableOpacity style={s.clearBtn} onPress={clearChat}>
+          <Feather name="trash-2" size={14} color="#8B8B9A" />
+          <Text style={s.clearText}>Clear</Text>
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -86,8 +100,8 @@ export default function AskScreen() {
           </View>
         )}
         ListFooterComponent={isTyping ? (
-          <View style={s.bubblePeek}>
-            <Text style={s.bubbleTextPeek}>···</Text>
+          <View style={[s.bubble, s.bubblePeek]}>
+            <Text style={s.bubbleTextPeek}>· · ·</Text>
           </View>
         ) : null}
       />
@@ -103,7 +117,7 @@ export default function AskScreen() {
           returnKeyType="send"
         />
         <TouchableOpacity style={s.sendBtn} onPress={send}>
-          <Text style={s.sendText}>↑</Text>
+          <Feather name="arrow-up" size={20} color="#0E0E10" />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -111,43 +125,57 @@ export default function AskScreen() {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0A0A0C' },
+  root: { flex: 1, backgroundColor: '#0E0E10' },
 
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 24, paddingTop: 64, paddingBottom: 16,
+    borderBottomWidth: 1, borderBottomColor: '#2A2A2F',
   },
-  headerCenter: { alignItems: 'center' },
-  headerTitle: { fontSize: 16, fontWeight: '600', color: '#F2F2F4' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  heroIcon: {
+    width: 44, height: 44, borderRadius: 14,
+    backgroundColor: 'rgba(110,231,183,0.1)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(110,231,183,0.2)',
+  },
+  headerTitle: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
   listeningRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#6EE7B7' },
   listeningText: { fontSize: 11, color: '#6EE7B7' },
+  clearBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 8, paddingHorizontal: 12,
+    borderRadius: 10, borderWidth: 1, borderColor: '#2A2A2F',
+    backgroundColor: '#1A1A1E',
+  },
+  clearText: { fontSize: 13, color: '#8B8B9A', fontWeight: '500' },
 
   messageList: { padding: 20, gap: 10 },
-
   bubble: { maxWidth: '80%', borderRadius: 16, padding: 14, marginBottom: 4 },
   bubbleUser: { backgroundColor: '#6EE7B7', alignSelf: 'flex-end', borderBottomRightRadius: 4 },
-  bubblePeek: { backgroundColor: '#151518', alignSelf: 'flex-start', borderBottomLeftRadius: 4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  bubblePeek: {
+    backgroundColor: '#1A1A1E', alignSelf: 'flex-start', borderBottomLeftRadius: 4,
+    borderWidth: 1, borderColor: '#2A2A2F',
+  },
   bubbleText: { fontSize: 14, lineHeight: 20 },
-  bubbleTextUser: { color: '#0A0A0C', fontWeight: '500' },
-  bubbleTextPeek: { color: '#F2F2F4' },
+  bubbleTextUser: { color: '#0E0E10', fontWeight: '500' },
+  bubbleTextPeek: { color: '#FFFFFF' },
 
   inputArea: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     padding: 16, paddingBottom: 36,
-    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)',
-    backgroundColor: '#0A0A0C',
+    borderTopWidth: 1, borderTopColor: '#2A2A2F',
+    backgroundColor: '#0E0E10',
   },
   input: {
-    flex: 1, backgroundColor: '#151518',
+    flex: 1, backgroundColor: '#1A1A1E',
     borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16,
-    fontSize: 14, color: '#F2F2F4',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    fontSize: 14, color: '#FFFFFF',
+    borderWidth: 1, borderColor: '#2A2A2F',
   },
   sendBtn: {
     width: 44, height: 44, borderRadius: 12,
     backgroundColor: '#6EE7B7', alignItems: 'center', justifyContent: 'center',
   },
-  sendText: { fontSize: 18, fontWeight: '700', color: '#0A0A0C' },
 });
